@@ -19,7 +19,7 @@ import "lib/tubes" =~ [
     => makeSplitPump :DeepFrozen,
     => makePumpTube :DeepFrozen,
     => chain :DeepFrozen]
-import "lib/irc/user" =~ [=> sourceToUser :DeepFrozen]
+import "irc/user" =~ [=> sourceToUser :DeepFrozen]
 import "lib/singleUse" =~ [=> makeSingleUse :DeepFrozen]
 import "lib/tokenBucket" =~ [=> makeTokenBucket :DeepFrozen]
 exports (makeIRCClient, connectIRCClient)
