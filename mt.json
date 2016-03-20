@@ -1,4 +1,9 @@
 {
     "name": "IRC",
-    "paths": ["."]
+    "paths": ["."],
+    "dependencies": {
+        "tokenBucket": {
+            "url": "https://github.com/monte-language/mt-tokenBucket"
+        }
+    }
 }
