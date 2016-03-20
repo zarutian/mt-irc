@@ -21,7 +21,7 @@ import "lib/tubes" =~ [
     => chain :DeepFrozen]
 import "irc/user" =~ [=> sourceToUser :DeepFrozen]
 import "lib/singleUse" =~ [=> makeSingleUse :DeepFrozen]
-import "lib/tokenBucket" =~ [=> makeTokenBucket :DeepFrozen]
+import "tokenBucket" =~ [=> makeTokenBucket :DeepFrozen]
 exports (makeIRCClient, connectIRCClient)
 
 
