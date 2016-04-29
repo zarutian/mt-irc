@@ -54,21 +54,15 @@ def makeIRCClient(handler, Timer) as DeepFrozen:
     def pendingChannels := [].asMap().diverge()
 
     # Five lines of burst and a new line every two seconds.
-    def tokenBucket := makeTokenBucket(5, 2.0)
+    def tokenBucket := makeTokenBucket(5, 0.5)
     tokenBucket.start(Timer)
 
     def flush() :Void:
         if (drain != null && pauses == 0):
-            for i => line in outgoing:
-                traceln("Sending line: " + line)
-                if (tokenBucket.deduct(1)):
-                    drain.receive(line + "\r\n")
-                else:
-                    traceln("Rate-limited")
-                    outgoing := outgoing.slice(i)
-                    when (tokenBucket.ready()) ->
-                        flush()
-                    return
+            for i => line in (outgoing):
+                when (tokenBucket.willDeduct(1)) ->
+                    traceln(`Sending line: $line`)
+                    drain<-receive(line + "\r\n")
             outgoing := []
 
     def line(l :Str) :Void:
