@@ -53,8 +53,12 @@ def makeIRCClient(handler, Timer) as DeepFrozen:
     # Pending events.
     def pendingChannels := [].asMap().diverge()
 
-    # Five lines of burst and a new line every two seconds.
-    def tokenBucket := makeTokenBucket(5, 0.5)
+    # Freenode's official rules are 2 seconds per line (0.5 lines/second) and
+    # 5 lines of burst. However, in practice, a refill rate of 0.5 appears to
+    # be a little too fast; we're still getting rate-limited every so often
+    # during long spans. So, instead, we're going to just lower the refill a
+    # tad. ~ C.
+    def tokenBucket := makeTokenBucket(5, 0.42)
     tokenBucket.start(Timer)
 
     def flush() :Void:
