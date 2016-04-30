@@ -59,7 +59,8 @@ def makeIRCClient(handler, Timer) as DeepFrozen:
 
     def flush() :Void:
         if (drain != null && pauses == 0):
-            for i => line in (outgoing):
+            for line in (outgoing):
+                traceln(`tb $tokenBucket`)
                 when (tokenBucket.willDeduct(1)) ->
                     traceln(`Sending line: $line`)
                     drain<-receive(line + "\r\n")
