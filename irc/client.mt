@@ -97,7 +97,7 @@ def makeIRCClient(handler, Timer) as DeepFrozen:
         to unpause():
             pauses -= 1
             if (drain != null && pauses == 0):
-                for line in outgoing:
+                for line in (outgoing):
                     traceln("Sending line: " + line)
                     drain.receive(line + "\r\n")
                 outgoing := []
@@ -137,7 +137,7 @@ def makeIRCClient(handler, Timer) as DeepFrozen:
                     traceln(`$nick joined $channel`)
 
                 match `:@nick!@{_} QUIT @{_}`:
-                    for channel in channels:
+                    for channel in (channels):
                         if (channel.contains(nick)):
                             channel.removeKey(nick)
                     traceln(`$nick has quit`)
@@ -153,7 +153,7 @@ def makeIRCClient(handler, Timer) as DeepFrozen:
                     traceln(`$nick has parted $channel`)
 
                 match `:@oldNick!@{_} NICK :@newNick`:
-                    for channel in channels:
+                    for channel in (channels):
                         escape ej:
                             def mode := channel.fetch(oldNick, ej)
                             channel.removeKey(oldNick)
@@ -174,7 +174,7 @@ def makeIRCClient(handler, Timer) as DeepFrozen:
                 match `@{_} 353 $nickname @{_} @channel :@nicks`:
                     def channelNicks := channels[channel]
                     def nickList := nicks.split(" ")
-                    for nick in nickList:
+                    for nick in (nickList):
                         channelNicks[nick] := null
                     traceln(`Current nicks on $channel: $channelNicks`)
 
@@ -190,7 +190,7 @@ def makeIRCClient(handler, Timer) as DeepFrozen:
             line(`PART $channel :$message`)
 
         to quit(message :Str):
-            for channel => _ in channels:
+            for channel => _ in (channels):
                 IRCTube.part(channel, message)
             line(`QUIT :$message`)
             tokenBucket.stop()
