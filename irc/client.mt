@@ -20,7 +20,6 @@ import "lib/tubes" =~ [
     => makePumpTube :DeepFrozen,
     => chain :DeepFrozen]
 import "irc/user" =~ [=> sourceToUser :DeepFrozen]
-import "lib/singleUse" =~ [=> makeSingleUse :DeepFrozen]
 import "tokenBucket" =~ [=> makeTokenBucket :DeepFrozen]
 exports (makeIRCClient, connectIRCClient)
 
@@ -89,10 +88,12 @@ def makeIRCClient(handler, Timer) as DeepFrozen:
 
         to pauseFlow():
             pauses += 1
-            def singleUse := makeSingleUse(IRCTube.unpause)
+            var once :Bool := true
             return object unpauser:
-                to unpause():
-                    singleUse()
+                to unpause() :Void:
+                    if (once):
+                        once := false
+                        IRCTube.unpause()
 
         to unpause():
             pauses -= 1
