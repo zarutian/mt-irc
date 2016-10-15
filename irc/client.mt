@@ -12,42 +12,24 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-import "lib/tubes" =~ [
-    => makeUTF8DecodePump :DeepFrozen,
-    => makeUTF8EncodePump :DeepFrozen,
-    => makeMapPump :DeepFrozen,
-    => makeSplitPump :DeepFrozen,
-    => makePumpTube :DeepFrozen,
-    => chain :DeepFrozen]
+import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
+import "lib/streams" =~ [
+    => alterSink :DeepFrozen,
+    => alterSource :DeepFrozen,
+    => flow :DeepFrozen,
+    => makePump :DeepFrozen,
+]
 import "irc/user" =~ [=> sourceToUser :DeepFrozen]
 import "tokenBucket" =~ [=> makeTokenBucket :DeepFrozen]
-exports (makeIRCClient, connectIRCClient)
+exports (makeIRCConnector, makeIRCClient)
 
-
-
-def makeLineTube() as DeepFrozen:
-    return makePumpTube(makeSplitPump(b`$\r$\n`))
-
-
-def makeIncoming() as DeepFrozen:
-    return makePumpTube(makeUTF8DecodePump())
-
-
-def makeOutgoing() as DeepFrozen:
-    return makePumpTube(makeUTF8EncodePump())
-
-
-def makeIRCClient(handler, Timer) as DeepFrozen:
-    var drain := null
-    var pauses :Int := 0
-
+def makeIRCClient(handler, Timer, source, sink) as DeepFrozen:
     var nickname :Str := handler.getNick()
     # This hostname will be refined later as the IRC server gives us more
     # feedback on what our reverse hostname looks like.
     var hostname :Str := "localhost"
     def username :Str := "monte"
     var channels := [].asMap()
-    var outgoing := []
 
     # Pending events.
     def pendingChannels := [].asMap().diverge()
@@ -60,68 +42,29 @@ def makeIRCClient(handler, Timer) as DeepFrozen:
     def tokenBucket := makeTokenBucket(5, 0.42)
     tokenBucket.start(Timer)
 
-    def flush() :Void:
-        if (drain != null && pauses == 0):
-            for line in (outgoing):
-                traceln(`tb $tokenBucket`)
-                when (tokenBucket.willDeduct(1)) ->
-                    traceln(`Sending line: $line`)
-                    drain<-receive(line + "\r\n")
-            outgoing := []
-
     def line(l :Str) :Void:
-        outgoing with= (l)
-        flush()
+        traceln(`write($l) $tokenBucket`)
+        when (tokenBucket.willDeduct(1)) ->
+            traceln(`Sending line: $l`)
+            sink(l + "\r\n")
 
-    return object IRCTube:
-        # Tube methods.
+    # Login.
 
-        to flowTo(newDrain):
-            drain := newDrain
-            def rv := drain.flowingFrom(IRCTube)
-            IRCTube.login()
-            return rv
+    line(`NICK $nickname`)
+    line(`USER $username $hostname irc.freenode.net :Monte`)
+    line("PING :suchPing") 
 
-        to flowingFrom(fount):
-            traceln("Flowing from:", fount)
-            return IRCTube
-
-        to pauseFlow():
-            pauses += 1
-            var once :Bool := true
-            return object unpauser:
-                to unpause() :Void:
-                    if (once):
-                        once := false
-                        IRCTube.unpause()
-
-        to unpause():
-            pauses -= 1
-            if (drain != null && pauses == 0):
-                for line in (outgoing):
-                    traceln("Sending line: " + line)
-                    drain.receive(line + "\r\n")
-                outgoing := []
-
-        to flowAborted(reason):
-            traceln(`$IRCTube flow aborted: $reason`)
-            drain := null
-
-        to flowStopped(reason):
-            traceln(`$IRCTube flow stopped: $reason`)
-            drain := null
-
-        # IRC wire stuff.
-
-        to receive(item):
+    object IRCClient extends sink:
+        # Override the sink to hook in behavior.
+        to run(item):
             switch (item):
                 match `:@{via (sourceToUser) user} PRIVMSG @channel :@message`:
                     if (message[0] == '\x01'):
                         # CTCP.
-                        handler.ctcp(IRCTube, user,
+                        handler.ctcp(IRCClient, user,
                                      message.slice(1, message.size() - 1))
                     else:
-                        handler.privmsg(IRCTube, user, channel, message)
+                        handler.privmsg(IRCClient, user, channel, message)
 
                 match `:@{via (sourceToUser) user} JOIN @channel`:
                     def nick := user.getNick()
@@ -132,7 +75,7 @@ def makeIRCClient(handler, Timer) as DeepFrozen:
                         traceln(`Refined hostname from $hostname to $host`)
                         hostname := host
 
-                        IRCTube.joined(channel)
+                        IRCClient.joined(channel)
                     # We have to call joined() prior to accessing this map.
                     channels[channel][nick] := []
                     traceln(`$nick joined $channel`)
@@ -162,7 +105,7 @@ def makeIRCClient(handler, Timer) as DeepFrozen:
                     traceln(`$oldNick is now known as $newNick`)
 
                 match `PING @ping`:
-                    IRCTube.pong(ping)
+                    IRCClient.pong(ping)
 
                 # XXX @_
                 match `:@{_} 004 $nickname @hostname @version @userModes @channelModes`:
@@ -170,7 +113,7 @@ def makeIRCClient(handler, Timer) as DeepFrozen:
                     traceln(`Server $hostname ($version)`)
                     traceln(`User modes: $userModes`)
                     traceln(`Channel modes: $channelModes`)
-                    handler.loggedIn(IRCTube)
+                    handler.loggedIn(IRCClient)
 
                 match `@{_} 353 $nickname @{_} @channel :@nicks`:
                     def channelNicks := channels[channel]
@@ -192,14 +135,9 @@ def makeIRCClient(handler, Timer) as DeepFrozen:
 
         to quit(message :Str):
             for channel => _ in (channels):
-                IRCTube.part(channel, message)
+                IRCClient.part(channel, message)
             line(`QUIT :$message`)
             tokenBucket.stop()
-
-        to login():
-            line(`NICK $nickname`)
-            line(`USER $username $hostname irc.freenode.net :Monte`)
-            line("PING :suchPing") 
 
         to join(var channel :Str):
             if (channel[0] != '#'):
@@ -238,7 +176,7 @@ def makeIRCClient(handler, Timer) as DeepFrozen:
 
         to ctcp(nick, message):
             # XXX CTCP quoting
-            IRCTube.notice(nick, `$\x01$message$\x01`)
+            IRCClient.notice(nick, `$\x01$message$\x01`)
 
         # Data accessors.
 
@@ -261,19 +199,24 @@ def makeIRCClient(handler, Timer) as DeepFrozen:
             if (channels.contains(channel)):
                 return null
             else:
-                IRCTube.join(channel)
+                IRCClient.join(channel)
                 def [p, r] := Ref.promise()
                 pendingChannels[channel] := r
                 return p
 
+    flow(source, IRCClient)
+    return IRCClient
 
-def connectIRCClient(client, endpoint) as DeepFrozen:
-    def [fount, drain] := endpoint.connect()
-    chain([
-        fount,
-        makeLineTube(),
-        makeIncoming(),
-        client,
-        makeOutgoing(),
-        drain,
-    ])
+def makeLinePump() as DeepFrozen:
+    return makePump.splitAt(b`$\r$\n`, b``)
+
+def makeIRCConnector(handler, Timer) as DeepFrozen:
+    return object IRCConnection:
+        to connect(endpoint) :Vow:
+            def [epSource, epSink] := endpoint.connectStream()
+            return when (epSource, epSink) ->
+                def lineSource := alterSource.fusePump(makeLinePump(), epSource)
+                def source := alterSource.decodeWith(UTF8, lineSource)
+                def sink := alterSink.encodeWith(UTF8, epSink)
+
+                makeIRCClient(handler, Timer, source, sink)
