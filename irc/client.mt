@@ -48,6 +48,24 @@ def makeIRCClient(handler, Timer, source, sink) as DeepFrozen:
             traceln(`Sending line: $l`)
             sink(l + "\r\n")
 
+    # PRIVMSG/NOTICE common core.
+    def sendMsg(type :Str, channel :Str, var message :Str):
+        def msg := `$type $channel :`
+        # ` nick!user@host `
+        def sourceLen := 4 + username.size() + nickname.size() + hostname.size()
+        # XXX WTF do these numbers come from? They're not obvious. Could we
+        # use msg.size() instead?
+        def paddingLen := 6 + 6 + 3 + 2 + 2
+        # Not 512, because \r\n is 2 and will be added by line().
+        def availableLen := 510 - sourceLen - paddingLen
+        while (message.size() > availableLen):
+            def slice := message.slice(0, availableLen)
+            def i := slice.lastIndexOf(" ")
+            def snippet := slice.slice(0, i)
+            line(msg + snippet)
+            message slice= (i + 1)
+        line(msg + message)
+
     # Login.
 
     line(`NICK $nickname`)
@@ -144,35 +162,11 @@ def makeIRCClient(handler, Timer, source, sink) as DeepFrozen:
                 channel := "#" + channel
             line(`JOIN $channel`)
 
-        to say(channel, var message):
-            def privmsg := `PRIVMSG $channel :`
-            # nick!user@host
-            def sourceLen := 4 + username.size() + nickname.size() + hostname.size()
-            def paddingLen := 6 + 6 + 3 + 2 + 2
-            # Not 512, because \r\n is 2 and will be added by line().
-            def availableLen := 510 - sourceLen - paddingLen
-            while (message.size() > availableLen):
-                def slice := message.slice(0, availableLen)
-                def i := slice.lastIndexOf(" ")
-                def snippet := slice.slice(0, i)
-                line(privmsg + snippet)
-                message := message.slice(i + 1)
-            line(privmsg + message)
+        to say(channel, message):
+            sendMsg("PRIVMSG", channel, message)
 
         to notice(channel, var message):
-            def notice := `NOTICE $channel :`
-            # nick!user@host
-            def sourceLen := 4 + username.size() + nickname.size() + hostname.size()
-            def paddingLen := 6 + 6 + 3 + 2 + 2
-            # Not 512, because \r\n is 2 and will be added by line().
-            def availableLen := 510 - sourceLen - paddingLen
-            while (message.size() > availableLen):
-                def slice := message.slice(0, availableLen)
-                def i := slice.lastIndexOf(" ")
-                def snippet := slice.slice(0, i)
-                line(notice + snippet)
-                message := message.slice(i + 1)
-            line(notice + message)
+            sendMsg("NOTICE", channel, message)
 
         to ctcp(nick, message):
             # XXX CTCP quoting
@@ -187,7 +181,7 @@ def makeIRCClient(handler, Timer, source, sink) as DeepFrozen:
 
         to joined(channel :Str):
             traceln(`I joined $channel`)
-            channels := channels.with(channel, [].asMap().diverge())
+            channels with= (channel, [].asMap().diverge())
 
             if (pendingChannels.contains(channel)):
                 pendingChannels[channel].resolve(null)
@@ -195,9 +189,9 @@ def makeIRCClient(handler, Timer, source, sink) as DeepFrozen:
 
         # High-level events.
 
-        to hasJoined(channel :Str):
-            if (channels.contains(channel)):
-                return null
+        to hasJoined(channel :Str) :Vow[Void]:
+            return if (channels.contains(channel)):
+                null
             else:
                 IRCClient.join(channel)
                 def [p, r] := Ref.promise()
