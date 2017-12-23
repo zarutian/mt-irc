@@ -18,6 +18,29 @@ def makeUser(nick :Str, user :Str, host :Str) as DeepFrozen:
         to getHost() :Str:
             return host
 
+def makeExtendedUser(irc_conn :Any, nick_in :Str, user :Str, host :Str, handler_in :Any) :Any:
+    var nick :Str := nick_in;
+    var handler :Any := handler_in;
+    var freenode_nickserv_identified :Bool := false;
+    return object extendedUser:
+        to _printOn(out):
+            out.print(`$nick!$user@@$host`)
+            
+        to _uncall():
+            return null
+            
+        to getNick() :Str:
+            return nick
+        
+        to getUser() :Str:
+            return user
+            
+        to getHost() :Str:
+            return host
+            
+        to handle_privmsg(msg :Str):
+        
+        to handle_CTCP(msg :Str):
 
 def sourceToUser(specimen, ej) as DeepFrozen:
     switch (specimen):
