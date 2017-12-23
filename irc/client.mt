@@ -76,13 +76,13 @@ def makeIRCClient(handler, Timer, source, sink) as DeepFrozen:
         # Override the sink to hook in behavior.
         to run(item):
             switch (item):
-                match `:@{via (sourceToUser) user} PRIVMSG @channel :@message`:
+                match `:@{via (sourceToUser) user} PRIVMSG @dest :@message`:
                     if (message[0] == '\x01'):
                         # CTCP.
                         handler.ctcp(IRCClient, user,
                                      message.slice(1, message.size() - 1))
                     else:
-                        handler.privmsg(IRCClient, user, channel, message)
+                        handler.privmsg(IRCClient, user, dest, message)
 
                 match `:@{via (sourceToUser) user} JOIN @channel`:
                     def nick := user.getNick()
