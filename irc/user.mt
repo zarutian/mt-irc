@@ -18,11 +18,31 @@ def makeUser(nick :Str, user :Str, host :Str) as DeepFrozen:
         to getHost() :Str:
             return host
 
+def placeHolder()
+
+def makeChannel(irc_conn :Any, name :Str) :Any
+    def chanzens := [].asMap().diverge()
+    
+    return object irc_channel:
+        to _printOn(out)
+          out.print(`irc channel: $name`)
+          
+        to handle_JOIN(user :Any)
+          chanzens[user] := placeHolder
+          
+        to handle_PART(user :Any, part_msg :Str)
+          if (chanzens.contains(user))
+            chanzens.removeKey(user)
+            
+        to handle_QUIT(user :Any, quit_msg :Str)
+          if (chanzens.contains(user))
+            chanzens.removeKey(user)
+
 def makeExtendedUser(irc_conn :Any, nick_in :Str, user :Str, host :Str, handler_in :Any) :Any:
     var nick :Str := nick_in
     var handler :Any := handler_in
     var nickserv_identified :Bool := false
-    var channels := [].asMap().diverge()
+    def channels := [].asMap().diverge()
     return object extendedUser:
         to _printOn(out):
             out.print(`$nick!$user@@$host`)
