@@ -19,9 +19,10 @@ def makeUser(nick :Str, user :Str, host :Str) as DeepFrozen:
             return host
 
 def makeExtendedUser(irc_conn :Any, nick_in :Str, user :Str, host :Str, handler_in :Any) :Any:
-    var nick :Str := nick_in;
-    var handler :Any := handler_in;
-    var freenode_nickserv_identified :Bool := false;
+    var nick :Str := nick_in
+    var handler :Any := handler_in
+    var nickserv_identified :Bool := false
+    var channels := [].asMap().diverge()
     return object extendedUser:
         to _printOn(out):
             out.print(`$nick!$user@@$host`)
@@ -38,9 +39,12 @@ def makeExtendedUser(irc_conn :Any, nick_in :Str, user :Str, host :Str, handler_
         to getHost() :Str:
             return host
             
-        to handle_privmsg(msg :Str):
+        to handle_privmsg(dest :Str, msg :Str):
         
-        to handle_CTCP(msg :Str):
+        to handle_CTCP(dest :Str, msg :Str):
+        
+        to handle_nick_change(new_nick :Str):
+          nick := new_nick
 
 def sourceToUser(specimen, ej) as DeepFrozen:
     switch (specimen):
